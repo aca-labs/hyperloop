@@ -9,11 +9,8 @@ class Person < ActiveModel::Model
   attribute adult : Bool, true
   attribute email : String
 
-  validates :name, presence: true
-  validates :name, length: {minimum: 3, too_short: "must be 3 characters long"}
-
-  validates :age, presence: true
-  validates :age, numericality: {:greater_than => 5}
+  validates :name, presence: true, length: {minimum: 3, too_short: "must be 3 characters long"}
+  validates :age, presence: true, numericality: {:greater_than => 5}
 
   validates :gender, confirmation: true
 
