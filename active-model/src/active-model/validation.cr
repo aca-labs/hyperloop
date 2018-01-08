@@ -59,6 +59,7 @@ module ActiveModel::Validation
                   presence = false,
                   numericality = nil,
                   confirmation = nil,
+                  format = nil,
                   **options)
     {% if presence %}
       {% for field, index in fields %}
@@ -108,6 +109,25 @@ module ActiveModel::Validation
           # Don't error when nil. Use presence to explicitly throw an error here.
           confirmation = this.{{field.id}}_confirmation || this.{{field.id}}
           this.{{field.id}} == confirmation
+        }, {{options[:if]}}, {{options[:unless]}}
+      {% end %}
+    {% end %}
+
+    {% if format %}
+      {% for field, index in fields %}
+        validate {{field}}, {{format[:message]}} || "is invalid", ->(this : {{@type.name}}) {
+          data = this.{{field.id}}
+          return true if data.nil?
+
+          {% if format[:with] %}
+            return false unless data =~ {{format[:with]}}
+          {% end %}
+
+          {% if format[:without] %}
+            return false if data =~ {{format[:without]}}
+          {% end %}
+
+          true
         }, {{options[:if]}}, {{options[:unless]}}
       {% end %}
     {% end %}

@@ -7,6 +7,7 @@ class Person < ActiveModel::Model
   attribute age : Int32, 32
   attribute gender : String
   attribute adult : Bool, true
+  attribute email : String
 
   validate :name, "is required", ->(this : Person) { !this.name.nil? }
   validate :name, "must be 3 characters long", ->(this : Person) do
@@ -20,6 +21,11 @@ class Person < ActiveModel::Model
   validates :age, numericality: {:greater_than => 5}
 
   validates :gender, confirmation: true
+
+  validates :email, format: {
+    :with    => /@/,
+    :without => /.edu/,
+  }
 
   validate("too old", ->(this : Person) {
     this.gender == "female"
@@ -119,6 +125,20 @@ describe ActiveModel::Validation do
       person.age = 52
       person.valid?.should eq false
       person.errors[0].to_s.should eq "Person not middle aged"
+    end
+  end
+
+  describe "format" do
+    it "should support with and without options" do
+      person = Person.new name: "bob", email: "bob@gmail.com"
+      person.valid?.should eq true
+
+      person.email = "bobgmail.com"
+      person.valid?.should eq false
+      person.errors[0].to_s.should eq "Email is invalid"
+
+      person.email = "bob@uni.edu"
+      person.valid?.should eq false
     end
   end
 
