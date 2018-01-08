@@ -34,23 +34,16 @@ The `attribute` macro takes two parameters. The field name with type and an opti
 ActiveModel::Validators is a mix-in that you include in your class:
 
 ```crystal
-require "active-model/validation"
+require "active-model"
 
-class Person
+class Person < ActiveModel::Model
   include ActiveModel::Validation
-  property name : String?
-  
-  validate :name, "is required", -> (this : Person) { this.name != nil }
-  
-  validate :name, "must be 3 characters long", -> (this : Person) do 
-    if name = this.name
-      return name.size > 2
-    end
-    return true
-  end
-  
-  def initialize(@name = nil)
-  end
+
+  attribute name : String
+  attribute age : Int32
+
+  validates :name, presence: true, length: { minimum: 3 }
+  validates :age, presence: true, numericality: {greater_than: 5}
 end
 ```
 
@@ -67,6 +60,6 @@ If no Symbol is provided as a first parameter, the errors will be added to the `
 ```crystal
 person = Person.new(name: "JD")
 person.valid?.should eq false
-person.errors[0].to_s.should eq "Name must be 3 characters long"
+person.errors[0].to_s.should eq "Name is too short"
 ```
 
