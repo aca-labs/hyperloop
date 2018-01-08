@@ -6,6 +6,7 @@ class Person < ActiveModel::Model
   attribute name : String
   attribute age : Int32, 32
   attribute gender : String
+  attribute adult : Bool, true
 
   validate :name, "is required", ->(this : Person) { !this.name.nil? }
   validate :name, "must be 3 characters long", ->(this : Person) do
@@ -28,6 +29,17 @@ class Person < ActiveModel::Model
     age = self.age
     age && age > 80
   end
+
+  validate("too childish", ->(this : Person) {
+    this.gender == "female"
+  }, unless: :adult)
+
+  validate("not middle aged", ->(this : Person) {
+    this.gender == "male"
+  }, unless: :adult, if: ->(this : Person) {
+    age = this.age
+    age && age > 50
+  })
 end
 
 describe ActiveModel::Validation do
@@ -72,7 +84,7 @@ describe ActiveModel::Validation do
   end
 
   describe "if/unless check" do
-    it "should check gender if the age is great" do
+    it "should support if condition" do
       person = Person.new name: "bob", gender: "female", age: 81
       person.valid?.should eq true
 
@@ -83,6 +95,30 @@ describe ActiveModel::Validation do
       person.age = 81
       person.valid?.should eq false
       person.errors[0].to_s.should eq "Person too old"
+    end
+
+    it "should support unless check" do
+      person = Person.new name: "bob", gender: "female", adult: true
+      person.valid?.should eq true
+
+      person.gender = "male"
+      person.valid?.should eq true
+
+      person.adult = false
+      person.valid?.should eq false
+      person.errors[0].to_s.should eq "Person too childish"
+    end
+
+    it "should support if and unless check combined" do
+      person = Person.new name: "bob", gender: "female", adult: true, age: 40
+      person.valid?.should eq true
+
+      person.adult = false
+      person.valid?.should eq true
+
+      person.age = 52
+      person.valid?.should eq false
+      person.errors[0].to_s.should eq "Person not middle aged"
     end
   end
 

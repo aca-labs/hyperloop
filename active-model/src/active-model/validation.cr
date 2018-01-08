@@ -4,7 +4,7 @@ module ActiveModel::Validation
   property errors = [] of Error
 
   macro included
-    @@validators = Array({field: Symbol, message: String, check: (Proc(self, Bool) | Nil), block: Proc(self, Bool)}).new
+    @@validators = Array({field: Symbol, message: String, positive: (Proc(self, Bool) | Nil), negative: (Proc(self, Bool) | Nil), block: Proc(self, Bool)}).new
   end
 
   # TODO:: Test this
@@ -15,23 +15,28 @@ module ActiveModel::Validation
   macro validate(field, message, block, positive = nil, negative = nil, **options)
     {% pos = positive || options[:if] %}
     {% neg = negative || options[:unless] %}
-    {% if positive || negative %}
-      {% if (positive || negative).stringify.starts_with? ":" %}
-        {% if positive %}
-          @@validators << {field: {{field}}, message: {{message}}, check: ->(this : {{@type.name}}) { !this.{{positive.id}} }, block: {{block}} }
-        {% else %}
-          @@validators << {field: {{field}}, message: {{message}}, check: ->(this : {{@type.name}}) { !!this.{{negative.id}} }, block: {{block}} }
-        {% end %}
+
+    {% if pos %}
+      {% if pos.stringify.starts_with? ":" %}
+        pos_proc = ->(this : {{@type.name}}) { !!this.{{positive.id}} }
       {% else %}
-        {% if positive %}
-          @@validators << {field: {{field}}, message: {{message}}, check: ->(this : {{@type.name}}) { !{{positive}}.call(this) }, block: {{block}} }
-        {% else %}
-          @@validators << {field: {{field}}, message: {{message}}, check: ->(this : {{@type.name}}) { !!{{negative}}.call(this) }, block: {{block}} }
-        {% end %}
+        pos_proc = ->(this : {{@type.name}}) { !!{{positive}}.call(this) }
       {% end %}
     {% else %}
-      @@validators << {field: {{field}}, message: {{message}}, check: nil, block: {{block}}}
+      pos_proc = nil
     {% end %}
+
+    {% if neg %}
+      {% if neg.stringify.starts_with? ":" %}
+        neg_proc = ->(this : {{@type.name}}) { !!this.{{negative.id}} }
+      {% else %}
+        neg_proc = ->(this : {{@type.name}}) { !!{{negative}}.call(this) }
+      {% end %}
+    {% else %}
+      neg_proc = nil
+    {% end %}
+
+    @@validators << {field: {{field}}, message: {{message}}, positive: pos_proc, negative: neg_proc, block: {{block}}}
   end
 
   macro validate(message, block, **options)
@@ -111,8 +116,16 @@ module ActiveModel::Validation
   def valid?
     errors.clear
     @@validators.each do |validator|
-      check = validator[:check]
-      next if check && check.call(self)
+      positive = validator[:positive]
+      if positive
+        next unless positive.call(self)
+      end
+
+      negative = validator[:negative]
+      if negative
+        next if negative.call(self)
+      end
+
       unless validator[:block].call(self)
         errors << Error.new(self, validator[:field], validator[:message])
       end
