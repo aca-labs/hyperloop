@@ -68,6 +68,23 @@ describe ActiveModel::Model do
         :no_default => nil,
       })
     end
+
+    it "uses named params for initialization" do
+      bk = BaseKlass.new string: "bob", no_default: "jane"
+      bk.attributes.should eq({
+        :string     => "bob",
+        :integer    => 45,
+        :no_default => "jane",
+      })
+
+      i = Inheritance.new string: "bob", boolean: false, integer: 2
+      i.attributes.should eq({
+        :boolean    => false,
+        :string     => "bob",
+        :integer    => 2,
+        :no_default => nil,
+      })
+    end
   end
 
   describe "attribute accessors" do

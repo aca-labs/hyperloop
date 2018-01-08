@@ -17,11 +17,6 @@ abstract class ActiveModel::Model
 
       # After map JSON as it also creates accessors
       __create_accessors__
-
-      # Needs to be provided after map json is applied
-      def initialize
-        apply_defaults
-      end
     end
   end
 
@@ -127,6 +122,20 @@ abstract class ActiveModel::Model
           {% end %}
       {% end %}
     {% end %}
+
+    def initialize(
+      {% for name, index in klasses %}
+        {% fields = FIELD_MAPPINGS[name.id] %}
+
+        {% if fields && !fields.empty? %}
+            {% for name, type in fields %}
+              @{{name}} : {{type}} | Nil = nil,
+            {% end %}
+        {% end %}
+      {% end %}
+    )
+      apply_defaults
+    end
   end
 
   macro attribute(name, default = nil)
