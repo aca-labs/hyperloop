@@ -9,13 +9,8 @@ class Person < ActiveModel::Model
   attribute adult : Bool, true
   attribute email : String
 
-  validate :name, "is required", ->(this : Person) { !this.name.nil? }
-  validate :name, "must be 3 characters long", ->(this : Person) do
-    if name = this.name
-      return name.size > 2
-    end
-    return true
-  end
+  validates :name, presence: true
+  validates :name, length: {minimum: 3, too_short: "must be 3 characters long"}
 
   validates :age, presence: true
   validates :age, numericality: {:greater_than => 5}

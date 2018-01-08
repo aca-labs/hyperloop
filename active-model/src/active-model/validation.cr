@@ -60,7 +60,14 @@ module ActiveModel::Validation
                   numericality = nil,
                   confirmation = nil,
                   format = nil,
+                  inclusion = nil,
+                  exclusion = nil,
+                  length = nil,
+                  absence = nil,
                   **options)
+
+    allow_blank = {{options[:allow_blank]}}
+
     {% if presence %}
       {% for field, index in fields %}
         validate {{field}}, "is required", ->(this : {{@type.name}}) { !this.{{field.id}}.nil? }, {{options[:if]}}, {{options[:unless]}}
@@ -118,6 +125,7 @@ module ActiveModel::Validation
         validate {{field}}, {{format[:message]}} || "is invalid", ->(this : {{@type.name}}) {
           data = this.{{field.id}}
           return true if data.nil?
+          return true if allow_blank && data.empty?
 
           {% if format[:with] %}
             return false unless data =~ {{format[:with]}}
@@ -127,6 +135,76 @@ module ActiveModel::Validation
             return false if data =~ {{format[:without]}}
           {% end %}
 
+          true
+        }, {{options[:if]}}, {{options[:unless]}}
+      {% end %}
+    {% end %}
+
+    {% if inclusion %}
+      {% for field, index in fields %}
+        validate {{field}}, {{inclusion[:message]}} || "is not included in the list", ->(this : {{@type.name}}) {
+          data = this.{{field.id}}
+          list = {{inclusion[:in] || inclusion[:within]}}
+          list.includes?(data)
+        }, {{options[:if]}}, {{options[:unless]}}
+      {% end %}
+    {% end %}
+
+    {% if exclusion %}
+      {% for field, index in fields %}
+        validate {{field}}, {{exclusion[:message]}} || "is reserved", ->(this : {{@type.name}}) {
+          data = this.{{field.id}}
+          list = {{exclusion[:in] || exclusion[:within]}}
+          !list.includes?(data)
+        }, {{options[:if]}}, {{options[:unless]}}
+      {% end %}
+    {% end %}
+
+    {% if length %}
+      {% for field, index in fields %}
+        {% if length[:minimum] %}
+          validate {{field}}, {{length[:too_short]}} || "is too short", ->(this : {{@type.name}}) {
+            data = this.{{field.id}}
+            return true if data.nil?
+            return true if allow_blank && data.empty?
+            data.size >= {{length[:minimum]}}
+          }, {{options[:if]}}, {{options[:unless]}}
+        {% end %}
+
+        {% if length[:maximum] %}
+          validate {{field}}, {{length[:too_long]}} || "is too long", ->(this : {{@type.name}}) {
+            data = this.{{field.id}}
+            return true if data.nil?
+            return true if allow_blank && data.empty?
+            data.size <= {{length[:maximum]}}
+          }, {{options[:if]}}, {{options[:unless]}}
+        {% end %}
+
+        {% if length[:in] || length[:within] %}
+          validate {{field}}, {{length[:wrong_length]}} || "is the wrong length", ->(this : {{@type.name}}) {
+            data = this.{{field.id}}
+            return true if data.nil?
+            return true if allow_blank && data.empty?
+            {{length[:in] || length[:within]}}.includes?(data)
+          }, {{options[:if]}}, {{options[:unless]}}
+        {% end %}
+
+        {% if length[:is] %}
+          validate {{field}}, {{length[:wrong_length]}} || "is the wrong length", ->(this : {{@type.name}}) {
+            data = this.{{field.id}}
+            return true if data.nil?
+            return true if allow_blank && data.empty?
+            data.size == {{length[:is]}}
+          }, {{options[:if]}}, {{options[:unless]}}
+        {% end %}
+      {% end %}
+    {% end %}
+
+    {% if absence %}
+      {% for field, index in fields %}
+        validate {{field}}, "is present", ->(this : {{@type.name}}) {
+          data = this.{{field.id}}
+          return false if data && !data.empty?
           true
         }, {{options[:if]}}, {{options[:unless]}}
       {% end %}
