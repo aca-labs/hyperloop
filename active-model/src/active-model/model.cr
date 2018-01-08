@@ -13,10 +13,8 @@ abstract class ActiveModel::Model
     macro finished
       __process_attributes__
       __customize_orm__
-      __map_json__
-
-      # After map JSON as it also creates accessors
-      __create_accessors__
+      __map_json__ # This creates the accessors
+      __create_initializer__
     end
   end
 
@@ -102,27 +100,8 @@ abstract class ActiveModel::Model
     {% end %}
   end
 
-  macro __create_accessors__
+  macro __create_initializer__
     {% klasses = [@type.name] + @type.ancestors %}
-
-    {% for name, index in klasses %}
-      {% fields = FIELD_MAPPINGS[name.id] %}
-
-      {% if fields && !fields.empty? %}
-          {% for name, type in fields %}
-            # Attribute setter
-            def {{name}}=(value : {{type}} | Nil)
-              @{{name}} = value
-            end
-
-            # Attribute getter
-            def {{name}}
-              @{{name}}
-            end
-          {% end %}
-      {% end %}
-    {% end %}
-
     def initialize(
       {% for name, index in klasses %}
         {% fields = FIELD_MAPPINGS[name.id] %}
