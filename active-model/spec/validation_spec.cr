@@ -1,8 +1,16 @@
 require "./spec_helper"
 
-class Person < ActiveModel::Model
+class ORM < ActiveModel::Model
   include ActiveModel::Validation
+end
 
+class Model < ORM
+  attribute email : String
+  validates :email, confirmation: true, presence: true
+  validates :email_confirmation, presence: true
+end
+
+class Person < ORM
   attribute name : String
   attribute age : Int32, 32
   attribute gender : String
@@ -38,16 +46,6 @@ class Person < ActiveModel::Model
     age = this.age
     age && age > 50
   })
-end
-
-class ORM < ActiveModel::Model
-  include ActiveModel::Validation
-end
-
-class Model < ORM
-  attribute email : String
-  validates :email, confirmation: true, presence: true
-  validates :email_confirmation, presence: true
 end
 
 describe ActiveModel::Validation do
