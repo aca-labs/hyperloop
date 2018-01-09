@@ -40,6 +40,16 @@ class Person < ActiveModel::Model
   })
 end
 
+class ORM < ActiveModel::Model
+  include ActiveModel::Validation
+end
+
+class Model < ORM
+  attribute email : String
+  validates :email, confirmation: true, presence: true
+  validates :email_confirmation, presence: true
+end
+
 describe ActiveModel::Validation do
   describe "presence" do
     it "validates presence of name" do
@@ -77,6 +87,15 @@ describe ActiveModel::Validation do
 
       # A nil version of the confirmation is ignored
       person = Person.new name: "bob", gender: "female"
+      person.valid?.should eq true
+    end
+
+    it "should work with inherited objects" do
+      person = Model.new email: "steve@acaprojects.com", email_confirmation: "nothing"
+      person.valid?.should eq false
+      person.errors[0].to_s.should eq "Email doesn't match confirmation"
+
+      person.email_confirmation = "steve@acaprojects.com"
       person.valid?.should eq true
     end
   end

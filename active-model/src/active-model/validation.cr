@@ -4,12 +4,13 @@ module ActiveModel::Validation
   property errors = [] of Error
 
   macro included
+    AM_PARENT_TYPE = {} of Nil => Nil
+    __set_amv_type__
     @@validators = Array({field: Symbol, message: String, positive: (Proc(self, Bool) | Nil), negative: (Proc(self, Bool) | Nil), block: Proc(self, Bool)}).new
   end
 
-  # TODO:: Test this
-  macro inherited
-    included
+  macro __set_amv_type__
+    {% AM_PARENT_TYPE[:type] = @type.name %}
   end
 
   macro validate(field, message, block, positive = nil, negative = nil, **options)
@@ -18,9 +19,9 @@ module ActiveModel::Validation
 
     {% if pos %}
       {% if pos.stringify.starts_with? ":" %}
-        pos_proc = ->(this : {{@type.name}}) { !!this.{{positive.id}} }
+        pos_proc = ->(this : {{AM_PARENT_TYPE[:type]}}) { !!this.as({{@type.name}}).{{positive.id}} }
       {% else %}
-        pos_proc = ->(this : {{@type.name}}) { !!{{positive}}.call(this) }
+        pos_proc = ->(this : {{AM_PARENT_TYPE[:type]}}) { !!{{positive}}.call(this.as({{@type.name}})) }
       {% end %}
     {% else %}
       pos_proc = nil
@@ -28,9 +29,9 @@ module ActiveModel::Validation
 
     {% if neg %}
       {% if neg.stringify.starts_with? ":" %}
-        neg_proc = ->(this : {{@type.name}}) { !!this.{{negative.id}} }
+        neg_proc = ->(this : {{AM_PARENT_TYPE[:type]}}) { !!this.as({{@type.name}}).{{negative.id}} }
       {% else %}
-        neg_proc = ->(this : {{@type.name}}) { !!{{negative}}.call(this) }
+        neg_proc = ->(this : {{AM_PARENT_TYPE[:type]}}) { !!{{negative}}.call(this.as({{@type.name}})) }
       {% end %}
     {% else %}
       neg_proc = nil
@@ -46,7 +47,8 @@ module ActiveModel::Validation
   macro __numericality__(fields, num, message, operation, positive, negative)
     {% if num %}
       {% for field, index in fields %}
-        validate({{field}}, "{{message.id}} {{num}}", ->(this : {{@type.name}}) {
+        validate({{field}}, "{{message.id}} {{num}}", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+          this = p.as({{@type.name}})
           number = this.{{field.id}}
           return true unless number.is_a?(Number)
           number {{operation.id}} {{num}}
@@ -70,7 +72,7 @@ module ActiveModel::Validation
 
     {% if presence %}
       {% for field, index in fields %}
-        validate {{field}}, "is required", ->(this : {{@type.name}}) { !this.{{field.id}}.nil? }, {{options[:if]}}, {{options[:unless]}}
+        validate {{field}}, "is required", ->(this : {{AM_PARENT_TYPE[:type]}}) { !this.as({{@type.name}}).{{field.id}}.nil? }, {{options[:if]}}, {{options[:unless]}}
       {% end %}
     {% end %}
 
@@ -85,7 +87,8 @@ module ActiveModel::Validation
       {% num = numericality[:odd] %}
       {% if num %}
         {% for field, index in fields %}
-          validate {{field}}, "must be odd", ->(this : {{@type.name}}) {
+          validate {{field}}, "must be odd", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+            this = p.as({{@type.name}})
             number = this.{{field.id}}
             return true unless number.is_a?(Number)
             number % 2 == 1
@@ -96,7 +99,8 @@ module ActiveModel::Validation
       {% num = numericality[:even] %}
       {% if num %}
         {% for field, index in fields %}
-          validate {{field}}, "must be even", ->(this : {{@type.name}}) {
+          validate {{field}}, "must be even", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+            this = p.as({{@type.name}})
             number = this.{{field.id}}
             return true unless number.is_a?(Number)
             number % 2 == 0
@@ -112,7 +116,9 @@ module ActiveModel::Validation
         # Using attribute for named params support
         attribute {{field.id}}_confirmation : {{FIELDS[field.id]}}
 
-        validate {{field}}, "doesn't match confirmation", ->(this : {{@type.name}}) {
+        validate {{field}}, "doesn't match confirmation", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+          this = p.as({{@type.name}})
+
           # Don't error when nil. Use presence to explicitly throw an error here.
           confirmation = this.{{field.id}}_confirmation || this.{{field.id}}
           this.{{field.id}} == confirmation
@@ -122,7 +128,9 @@ module ActiveModel::Validation
 
     {% if format %}
       {% for field, index in fields %}
-        validate {{field}}, {{format[:message]}} || "is invalid", ->(this : {{@type.name}}) {
+        validate {{field}}, {{format[:message]}} || "is invalid", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+          this = p.as({{@type.name}})
+
           data = this.{{field.id}}
           return true if data.nil?
           return true if allow_blank && data.empty?
@@ -142,7 +150,8 @@ module ActiveModel::Validation
 
     {% if inclusion %}
       {% for field, index in fields %}
-        validate {{field}}, {{inclusion[:message]}} || "is not included in the list", ->(this : {{@type.name}}) {
+        validate {{field}}, {{inclusion[:message]}} || "is not included in the list", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+          this = p.as({{@type.name}})
           data = this.{{field.id}}
           list = {{inclusion[:in] || inclusion[:within]}}
           list.includes?(data)
@@ -152,7 +161,8 @@ module ActiveModel::Validation
 
     {% if exclusion %}
       {% for field, index in fields %}
-        validate {{field}}, {{exclusion[:message]}} || "is reserved", ->(this : {{@type.name}}) {
+        validate {{field}}, {{exclusion[:message]}} || "is reserved", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+          this = p.as({{@type.name}})
           data = this.{{field.id}}
           list = {{exclusion[:in] || exclusion[:within]}}
           !list.includes?(data)
@@ -163,7 +173,8 @@ module ActiveModel::Validation
     {% if length %}
       {% for field, index in fields %}
         {% if length[:minimum] %}
-          validate {{field}}, {{length[:too_short]}} || "is too short", ->(this : {{@type.name}}) {
+          validate {{field}}, {{length[:too_short]}} || "is too short", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+            this = p.as({{@type.name}})
             data = this.{{field.id}}
             return true if data.nil?
             return true if allow_blank && data.empty?
@@ -172,7 +183,8 @@ module ActiveModel::Validation
         {% end %}
 
         {% if length[:maximum] %}
-          validate {{field}}, {{length[:too_long]}} || "is too long", ->(this : {{@type.name}}) {
+          validate {{field}}, {{length[:too_long]}} || "is too long", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+            this = p.as({{@type.name}})
             data = this.{{field.id}}
             return true if data.nil?
             return true if allow_blank && data.empty?
@@ -181,7 +193,8 @@ module ActiveModel::Validation
         {% end %}
 
         {% if length[:in] || length[:within] %}
-          validate {{field}}, {{length[:wrong_length]}} || "is the wrong length", ->(this : {{@type.name}}) {
+          validate {{field}}, {{length[:wrong_length]}} || "is the wrong length", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+            this = p.as({{@type.name}})
             data = this.{{field.id}}
             return true if data.nil?
             return true if allow_blank && data.empty?
@@ -190,7 +203,8 @@ module ActiveModel::Validation
         {% end %}
 
         {% if length[:is] %}
-          validate {{field}}, {{length[:wrong_length]}} || "is the wrong length", ->(this : {{@type.name}}) {
+          validate {{field}}, {{length[:wrong_length]}} || "is the wrong length", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+            this = p.as({{@type.name}})
             data = this.{{field.id}}
             return true if data.nil?
             return true if allow_blank && data.empty?
@@ -202,7 +216,8 @@ module ActiveModel::Validation
 
     {% if absence %}
       {% for field, index in fields %}
-        validate {{field}}, "is present", ->(this : {{@type.name}}) {
+        validate {{field}}, "is present", ->(p : {{AM_PARENT_TYPE[:type]}}) {
+          this = p.as({{@type.name}})
           data = this.{{field.id}}
           return false if data && !data.empty?
           true
