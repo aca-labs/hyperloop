@@ -5,9 +5,11 @@ abstract class ActiveModel::Model
 
   macro inherited
     # Macro level constants
-    FIELDS = {} of Nil => Nil
+    LOCAL_FIELDS = {} of Nil => Nil
     DEFAULTS = {} of Nil => Nil
     HAS_KEYS = [false]
+    FIELDS = {} of Nil => Nil
+
 
     # Process attributes must be called while constants are in scope
     macro finished
@@ -22,8 +24,20 @@ abstract class ActiveModel::Model
   def apply_defaults; end
 
   macro __process_attributes__
-    {% FIELD_MAPPINGS[@type.name.id] = FIELDS %}
-    {% klasses = [@type.name] + @type.ancestors %}
+    {% FIELD_MAPPINGS[@type.name.id] = LOCAL_FIELDS %}
+    {% klasses = @type.ancestors %}
+
+    # Create a mapping of all field names and types
+    {% for name, index in klasses %}
+      {% fields = FIELD_MAPPINGS[name.id] %}
+
+      {% if fields && !fields.empty? %}
+        {% for name, type in fields %}
+          {% FIELDS[name] = type %}
+          {% HAS_KEYS[0] = true %}
+        {% end %}
+      {% end %}
+    {% end %}
 
     # Generate code to apply default values
     def apply_defaults
@@ -35,40 +49,20 @@ abstract class ActiveModel::Model
 
     # Returns a hash of all the attribute values
     def attributes
-      {% any = false %}
-
       {
-        {% for name, index in klasses %}
-          {% fields = FIELD_MAPPINGS[name.id] %}
-
-          {% if fields && !fields.empty? %}
-            {% for name, index in fields.keys %}
-              :{{name}} => @{{name}},
-              {% any = true %}
-            {% end %}
-          {% end %}
+        {% for name, index in FIELDS.keys %}
+          :{{name}} => @{{name}},
         {% end %}
-      } {% if !any %} of Nil => Nil {% end %}
+      } {% if !HAS_KEYS[0] %} of Nil => Nil {% end %}
     end
 
     # You may want a list of available attributes
     def self.attributes
-      {% any = false %}
-
       [
-        {% for name, index in klasses %}
-          {% fields = FIELD_MAPPINGS[name.id] %}
-
-          {% if fields && !fields.empty? %}
-            {% for name, index in fields.keys %}
-              :{{name.id}},
-              {% any = true %}
-            {% end %}
-          {% end %}
+        {% for name, index in FIELDS.keys %}
+          :{{name.id}},
         {% end %}
-      ] {% if !any %} of Nil {% end %}
-
-      {% HAS_KEYS[0] = any %}
+      ] {% if !HAS_KEYS[0] %} of Nil {% end %}
     end
   end
 
@@ -79,17 +73,9 @@ abstract class ActiveModel::Model
   # Adds the from_json method
   macro __map_json__
     {% if HAS_KEYS[0] %}
-      {% klasses = [@type.name] + @type.ancestors %}
-
       JSON.mapping(
-        {% for name, index in klasses %}
-          {% fields = FIELD_MAPPINGS[name.id] %}
-
-          {% if fields && !fields.empty? %}
-              {% for name, type in fields %}
-                {{name}}: {{type}} | Nil,
-              {% end %}
-          {% end %}
+        {% for name, type in FIELDS %}
+          {{name}}: {{type}} | Nil,
         {% end %}
       )
 
@@ -101,16 +87,9 @@ abstract class ActiveModel::Model
   end
 
   macro __create_initializer__
-    {% klasses = [@type.name] + @type.ancestors %}
     def initialize(
-      {% for name, index in klasses %}
-        {% fields = FIELD_MAPPINGS[name.id] %}
-
-        {% if fields && !fields.empty? %}
-            {% for name, type in fields %}
-              @{{name}} : {{type}} | Nil = nil,
-            {% end %}
-        {% end %}
+      {% for name, type in FIELDS %}
+        @{{name}} : {{type}} | Nil = nil,
       {% end %}
     )
       apply_defaults
@@ -124,7 +103,9 @@ abstract class ActiveModel::Model
     end
 
     # Save field details for finished macro
+    {% LOCAL_FIELDS[name.var] = name.type %}
     {% FIELDS[name.var] = name.type %}
+    {% HAS_KEYS[0] = true %}
     {% if default %}
       {% DEFAULTS[name.var] = default %}
     {% end %}
