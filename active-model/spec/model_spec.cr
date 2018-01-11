@@ -6,13 +6,13 @@ end
 
 # Inheritance should be supported
 class BaseKlass < NoAttributes
-  attribute string : String, "hello"
-  attribute integer : Int32, 45
+  attribute string : String = "hello"
+  attribute integer : Int32 = 45
   attribute no_default : String
 end
 
 class Inheritance < BaseKlass
-  attribute boolean : Bool, true
+  attribute boolean : Bool = true
 
   macro __customize_orm__
     {% for name, type in FIELDS %}
@@ -24,7 +24,7 @@ class Inheritance < BaseKlass
 end
 
 class Changes < BaseKlass
-  attribute arr : Array(Int32), [1, 2, 3]
+  attribute arr : Array(Int32) = [1, 2, 3]
 end
 
 describe ActiveModel::Model do
@@ -162,7 +162,7 @@ describe ActiveModel::Model do
       klass.changed?.should eq true
       klass.changed_attributes.should eq({:no_default => "bob"})
 
-      klass.string_change.should eq ({"hello", "hello"})
+      klass.string_change.should eq nil
       klass.string = "else"
       klass.string_change.should eq ({"hello", "else"})
     end

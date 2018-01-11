@@ -12,9 +12,9 @@ end
 
 class Person < ORM
   attribute name : String
-  attribute age : Int32, 32
+  attribute age : Int32 = 32
   attribute gender : String
-  attribute adult : Bool, true
+  attribute adult : Bool = true
   attribute email : String
 
   validates :name, presence: true, length: {minimum: 3, too_short: "must be 3 characters long"}

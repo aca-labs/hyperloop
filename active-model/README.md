@@ -13,7 +13,7 @@ ActiveModel::Model should be used as the base class for your ORM
 require "active-model"
 
 class Person < ActiveModel::Model
-  attribute name : String, "default value"
+  attribute name : String = "default value"
   attribute age : Int32
 end
 
@@ -31,7 +31,7 @@ The `attribute` macro takes two parameters. The field name with type and an opti
 
 #### Validations
 
-ActiveModel::Validators is a mix-in that you include in your class:
+ActiveModel::Validators is a mix-in that you include in your class. Similar to those supported by Rails: http://guides.rubyonrails.org/active_record_validations.html
 
 ```crystal
 require "active-model"
@@ -63,3 +63,21 @@ person.valid?.should eq false
 person.errors[0].to_s.should eq "Name is too short"
 ```
 
+
+#### Dirty Checking
+
+Changes to attributes are tracked throughout the lifetime of the model. Similar to Rails: http://api.rubyonrails.org/classes/ActiveModel/Dirty.html
+
+```crystal
+
+person = Person.new(name: "JD")
+person.changed? # => true
+person.changed_attributes # => {:name => "JD"}
+person.name_changed? # => true
+person.name_change # => {nil, "JD"}
+person.name_was # => nil
+
+person.clear_changes_information
+person.changed? # => false
+
+```

@@ -84,7 +84,7 @@ abstract class ActiveModel::Model
       {% if HAS_KEYS[0] %}
         {% for name, index in FIELDS.keys %}
           @{{name}}_changed = false
-          @{{name}}_was = @{{name}}
+          @{{name}}_was = nil
         {% end %}
       {% end %}
       nil
@@ -113,7 +113,11 @@ abstract class ActiveModel::Model
       end
 
       def {{name}}_change
-        {@{{name}}_was, @{{name}}}
+        if @{{name}}_changed
+          {@{{name}}_was, @{{name}}}
+        else
+          nil
+        end
       end
     {% end %}
 
@@ -165,18 +169,22 @@ abstract class ActiveModel::Model
     {% end %}
   end
 
-  macro attribute(name, default = nil)
+  macro attribute(name)
     # Attribute default value
     def {{name.var}}_default : {{name.type}} | Nil
-      {{default}}
+      {% if name.value %}
+        {{ name.value }}
+      {% else %}
+        nil
+      {% end %}
     end
 
     # Save field details for finished macro
     {% LOCAL_FIELDS[name.var] = name.type %}
     {% FIELDS[name.var] = name.type %}
     {% HAS_KEYS[0] = true %}
-    {% if default %}
-      {% DEFAULTS[name.var] = default %}
+    {% if name.value %}
+      {% DEFAULTS[name.var] = name.value %}
     {% end %}
   end
 end

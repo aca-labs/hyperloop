@@ -232,4 +232,8 @@ module ActiveModel::Validation
     end
     errors.empty?
   end
+
+  def invalid?
+    !valid?
+  end
 end
