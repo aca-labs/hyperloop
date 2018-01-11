@@ -23,6 +23,10 @@ class Inheritance < BaseKlass
   end
 end
 
+class Changes < BaseKlass
+  attribute arr : Array(Int32), [1, 2, 3]
+end
+
 describe ActiveModel::Model do
   describe "class definitions" do
     it "should provide the list of attributes" do
@@ -134,6 +138,66 @@ describe ActiveModel::Model do
 
       i.no_default = "test"
       i.to_json.should eq "{\"boolean\":true,\"string\":\"hello\",\"integer\":45,\"no_default\":\"test\"}"
+    end
+  end
+
+  describe "change tracking" do
+    it "should track changes" do
+      BaseKlass.new.changed_attributes.should eq({:string => "hello", :integer => 45})
+      klass = Inheritance.new
+      klass.changed_attributes.should eq({:boolean => true, :string => "hello", :integer => 45})
+      klass.string_change.should eq ({nil, "hello"})
+    end
+
+    it "should allow changes information to be cleared" do
+      klass = Inheritance.new
+      klass.changed_attributes.should eq({:boolean => true, :string => "hello", :integer => 45})
+      klass.clear_changes_information
+      klass.changed_attributes.should eq({} of Nil => Nil)
+      klass.changed?.should eq false
+      klass.no_default_changed?.should eq false
+      klass.no_default = "bob"
+      klass.no_default_changed?.should eq true
+      klass.no_default_change.should eq ({nil, "bob"})
+      klass.changed?.should eq true
+      klass.changed_attributes.should eq({:no_default => "bob"})
+
+      klass.string_change.should eq ({"hello", "hello"})
+      klass.string = "else"
+      klass.string_change.should eq ({"hello", "else"})
+    end
+
+    it "should be able to mark attributes as changed" do
+      klass = Changes.new
+      klass.clear_changes_information
+      klass.arr.should eq [1, 2, 3]
+      arr = klass.arr
+      raise "no array" unless arr
+      arr << 123
+      klass.arr.should eq [1, 2, 3, 123]
+      klass.arr_changed?.should eq false
+      klass.changed_attributes.should eq({} of Nil => Nil)
+      klass.arr_will_change!
+      klass.arr_changed?.should eq true
+      klass.changed_attributes.should eq({:arr => [1, 2, 3, 123]})
+
+      arr << 456
+      klass.changed_attributes.should eq({:arr => [1, 2, 3, 123, 456]})
+      klass.arr_change.should eq({[1, 2, 3, 123], [1, 2, 3, 123, 456]})
+    end
+
+    it "should restore changes" do
+      klass = Inheritance.new
+      klass.clear_changes_information
+      klass.changed_attributes.should eq({} of Nil => Nil)
+
+      klass.string = "bob"
+      klass.string_changed?.should eq true
+      klass.string_change.should eq({"hello", "bob"})
+
+      klass.restore_attributes
+      klass.string_changed?.should eq false
+      klass.string.should eq "hello"
     end
   end
 end

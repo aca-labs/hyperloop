@@ -15,7 +15,8 @@ abstract class ActiveModel::Model
     macro finished
       __process_attributes__
       __customize_orm__
-      __map_json__ # This creates the accessors
+      __track_changes__
+      __map_json__
       __create_initializer__
     end
   end
@@ -43,7 +44,7 @@ abstract class ActiveModel::Model
     def apply_defaults
       super
       {% for name, data in DEFAULTS %}
-        self.{{name}} = {{data}} if self.{{name}}.nil?
+        self.{{name}} = {{data}} if @{{name}}.nil?
       {% end %}
     end
 
@@ -70,6 +71,84 @@ abstract class ActiveModel::Model
   macro __customize_orm__
   end
 
+  macro __track_changes__
+    def changed_attributes
+      all = attributes
+      {% for name, index in FIELDS.keys %}
+        all.delete(:{{name}}) unless @{{name}}_changed
+      {% end %}
+      all
+    end
+
+    def clear_changes_information
+      {% if HAS_KEYS[0] %}
+        {% for name, index in FIELDS.keys %}
+          @{{name}}_changed = false
+          @{{name}}_was = @{{name}}
+        {% end %}
+      {% end %}
+      nil
+    end
+
+    def changed?
+      modified = false
+      {% for name, index in FIELDS.keys %}
+        modified = true if @{{name}}_changed
+      {% end %}
+      modified
+    end
+
+    {% for name, index in FIELDS.keys %}
+      def {{name}}_changed?
+        !!@{{name}}_changed
+      end
+
+      def {{name}}_will_change!
+        @{{name}}_changed = true
+        @{{name}}_was = @{{name}}.dup
+      end
+
+      def {{name}}_was
+        @{{name}}_was
+      end
+
+      def {{name}}_change
+        {@{{name}}_was, @{{name}}}
+      end
+    {% end %}
+
+    def restore_attributes
+      {% for name, index in FIELDS.keys %}
+        @{{name}} = @{{name}}_was if @{{name}}_changed
+      {% end %}
+      clear_changes_information
+    end
+  end
+
+  macro __create_initializer__
+    def initialize(
+      {% for name, type in FIELDS %}
+        {{name}} : {{type}} | Nil = nil,
+      {% end %}
+    )
+      {% for name, type in FIELDS %}
+        self.{{name}} = {{name}} unless {{name}}.nil?
+      {% end %}
+      apply_defaults
+    end
+
+    # Override the map json
+    {% for name, type in FIELDS %}
+      def {{name}}=(value : {{type}} | Nil)
+        if !@{{name}}_changed && @{{name}} != value
+          @{{name}}_changed = true
+          @{{name}}_was = @{{name}}
+        end
+        @{{name}} = value
+      end
+    {% end %}
+  end
+
   # Adds the from_json method
   macro __map_json__
     {% if HAS_KEYS[0] %}
@@ -84,16 +163,6 @@ abstract class ActiveModel::Model
         apply_defaults
       end
     {% end %}
-  end
-
-  macro __create_initializer__
-    def initialize(
-      {% for name, type in FIELDS %}
-        @{{name}} : {{type}} | Nil = nil,
-      {% end %}
-    )
-      apply_defaults
-    end
   end
 
   macro attribute(name, default = nil)
