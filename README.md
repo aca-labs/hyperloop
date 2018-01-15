@@ -4,7 +4,7 @@ A lightweight framework for building web applications in [Crystal Lang](https://
 
 ## Components
 
-* [Active Model](active-model/README.md) base class for building [ORMs](https://en.wikipedia.org/wiki/Object-relational_mapping)
+* [Active Model](active-model/) base class for building [ORMs](https://en.wikipedia.org/wiki/Object-relational_mapping)
 * [Habitat](https://github.com/luckyframework/habitat) configuration and settings for Crystal projects
 * [router.cr](https://github.com/tbrand/router.cr) base routing and request handling
 * [Radix](https://github.com/luislavena/radix) Radix Tree implementation for request routing
