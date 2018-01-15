@@ -1,0 +1,11 @@
+name: tagged-logger
+version: 0.1.0
+
+dependencies:
+  habitat:
+    github: luckyframework/habitat
+
+authors:
+  - Stephen von Takach <steve@acaprojects.com>
+
+license: MIT
