@@ -1,0 +1,82 @@
+# Hyperloop Action Controller
+
+Extending [router.cr](https://github.com/tbrand/router.cr) for a Rails like DSL without the overhead.
+
+
+## Usage
+
+```crystal
+require "action-controller"
+
+class MyResource < ActionController::Base
+  base "/resource"
+
+  def index
+    render text: "index"
+  end
+
+  def show
+    render json: {id: params["id"]}
+  end
+
+  put "/custom/route", :route_name do
+    render :accepted, text: "simple right?"
+  end
+end
+```
+
+Results in the following high performance code being generated:
+
+```crystal
+class MyResource < ActionController::Base
+  getter render_called
+  getter params : Hash(String, String)
+  getter cookies : HTTP::Cookies
+  getter request : HTTP::Request
+  getter response : HTTP::Server::Response
+
+  def initialize(context : HTTP::Server::Context, @params)
+    @render_called = false
+    @request = context.request
+    @response = context.response
+    @cookies = @request.cookies
+  end
+
+  def index
+    @response.print("index")
+  end
+
+  def show
+    @response.print({id: params["id"]}.to_json)
+  end
+
+  def route_name
+    @response.status_code = 202
+    @response.print("simple right?")
+  end
+
+  def self.draw_routes(router)
+    # Supports inheritance
+    super(router)
+
+    # Implement the router.cr compatible routes:
+    router.get "/resource/" do |context, params|
+      instance = MyResource.new(context, params)
+      instance.index
+      context
+    end
+
+    router.get "/resource/:id" do |context, params|
+      instance = MyResource.new(context, params)
+      instance.show
+      context
+    end
+
+    router.get "/resource/custom/route" do |context, params|
+      instance = MyResource.new(context, params)
+      instance.route_name
+      context
+    end
+  end
+end
+```
