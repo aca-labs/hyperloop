@@ -40,16 +40,6 @@ class ActionController::Base
     already_reported:              208,
     im_used:                       226,
 
-    # 3xx redirection
-    multiple_choices:   300,
-    moved_permanently:  301,
-    found:              302,
-    see_other:          303,
-    not_modified:       304,
-    use_proxy:          305,
-    temporary_redirect: 307,
-    permanent_redirect: 308,
-
     # 4xx client error
     bad_request:                     400,
     unauthorized:                    401,
@@ -93,6 +83,18 @@ class ActionController::Base
     network_authentication_required: 511,
   }
 
+  REDIRECTION_CODES = {
+    # 3xx redirection
+    multiple_choices:   300,
+    moved_permanently:  301,
+    found:              302,
+    see_other:          303,
+    not_modified:       304,
+    use_proxy:          305,
+    temporary_redirect: 307,
+    permanent_redirect: 308,
+  }
+
   # def self.yield_controller(instance)
   #  with instance yield
   # end
@@ -110,9 +112,9 @@ class ActionController::Base
     @cookies = @request.cookies
   end
 
-  macro render(head = :ok, json = nil, text = nil)
-    {% if head != :ok || head != 200 %}
-      @response.status_code = {{STATUS_CODES[head] || head}}
+  macro render(status = :ok, json = nil, text = nil)
+    {% if status != :ok || status != 200 %}
+      @response.status_code = {{STATUS_CODES[status] || status}}
     {% end %}
 
     {% if json %}
@@ -129,8 +131,8 @@ class ActionController::Base
   end
 
   macro redirect_to(path, status = :found)
-    @response.status_code = {{STATUS_CODES[head] || head}}
-    @response.headers["Location"] = path
+    @response.status_code = {{REDIRECTION_CODES[status] || status}}
+    @response.headers["Location"] = {{path}}
     @render_called = true
   end
 

@@ -14,6 +14,11 @@ describe ActionController::Base do
     result.not_nil!.body.should eq("index")
   end
 
+  it "#redirect" do
+    result = curl("GET", "/redirect")
+    result.not_nil!.headers["Location"].should eq("/other_route")
+  end
+
   it "#params" do
     result = curl("GET", "/params/1")
     result.not_nil!.body.should eq("params:1")
@@ -46,7 +51,8 @@ describe ActionController::Base do
 
   it "should list routes" do
     Bob.routes.should eq([
-      {:show, :get, "/params/:id"},
+      {:redirect, :get, "/redirect"},
+      {:param_id, :get, "/params/:id"},
       {:deep_show, :get, "/params/:id/test/:test_id"},
       {:create, :post, "/post_test"},
       {:update, :put, "/put_test"},

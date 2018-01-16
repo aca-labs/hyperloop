@@ -10,7 +10,11 @@ class Bob < ActionController::Base
     render text: "index"
   end
 
-  get "/params/:id", :show do
+  get "/redirect", :redirect do
+    redirect_to "/other_route"
+  end
+
+  get "/params/:id", :param_id do
     render text: "params:#{params["id"]}"
   end
 
