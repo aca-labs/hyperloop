@@ -72,7 +72,7 @@ class MyResource < ActionController::Base
       context
     end
 
-    router.get "/resource/custom/route" do |context, params|
+    router.put "/resource/custom/route" do |context, params|
       instance = MyResource.new(context, params)
       instance.route_name
       context
