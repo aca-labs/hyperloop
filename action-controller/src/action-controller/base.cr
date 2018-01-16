@@ -116,13 +116,21 @@ class ActionController::Base
     {% end %}
 
     {% if json %}
+      @response.content_type = "application/json"
       @response.print({{json}}.to_json)
     {% else %}
       {% if text %}
+        @response.content_type = "text/plain"
         @response.print({{text}})
       {% end %}
     {% end %}
 
+    @render_called = true
+  end
+
+  macro redirect_to(path, status = :found)
+    @response.status_code = {{STATUS_CODES[head] || head}}
+    @response.headers["Location"] = path
     @render_called = true
   end
 

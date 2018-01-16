@@ -43,17 +43,20 @@ class MyResource < ActionController::Base
   end
 
   def index
+    @response.content_type = "text/plain"
     @response.print("index")
     @render_called = true
   end
 
   def show
+    @response.content_type = "application/json"
     @response.print({id: params["id"]}.to_json)
     @render_called = true
   end
 
   def route_name
     @response.status_code = 202
+    @response.content_type = "text/plain"
     @response.print("simple right?")
     @render_called = true
   end
