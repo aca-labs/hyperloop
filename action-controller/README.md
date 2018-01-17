@@ -5,6 +5,39 @@ Extending [router.cr](https://github.com/tbrand/router.cr) for a Rails like DSL 
 
 ## Usage
 
+Supports many of the helpers that Rails provides for controllers. i.e. before and after filters
+
+```crystal
+require "action-controller"
+
+abstract class Application < ActionController::Base
+  before_action :ensure_authenticated
+
+  rescue_from DivisionByZero do |error|
+    render :bad_request, text: error.message
+  end
+
+  private def ensure_authenticated
+    render :unauthorized unless cookies[:user]
+  end
+end
+
+class Books < Application
+  base "/books" # <= this is automatically
+
+  def index
+    render json: ["book1", "book2"]
+  end
+
+  def show
+    render text: params["id"]
+  end
+end
+```
+
+
+### Code Expansion
+
 ```crystal
 require "action-controller"
 
