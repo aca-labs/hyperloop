@@ -43,12 +43,25 @@ end
 class HelloWorld < Application
   base "/hello"
 
+  before_action :set_var, only: :index
+  after_action :after, except: :index
+
   def show
+    raise "set_var was set!" if @me
     res = 42 / params["id"].to_i
     render text: "42 / #{params["id"]} = #{res}"
   end
 
   def index
+    render text: "set_var #{@me}"
+  end
+
+  private def set_var
+    @me = 123
+  end
+
+  private def after
+    puts "after #{action_name}"
   end
 end
 

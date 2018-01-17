@@ -119,12 +119,13 @@ abstract class ActionController::Base
   }
 
   getter render_called
+  getter action_name : Symbol
   getter params : Hash(String, String)
   getter cookies : HTTP::Cookies
   getter request : HTTP::Request
   getter response : HTTP::Server::Response
 
-  def initialize(context : HTTP::Server::Context, @params)
+  def initialize(context : HTTP::Server::Context, @params, @action_name)
     @render_called = false
     @request = context.request
     @response = context.response
@@ -238,6 +239,10 @@ abstract class ActionController::Base
     [] of {Symbol, Symbol, String}
   end
 
+  def self.__yield__(inst)
+    with inst yield
+  end
+
   macro __draw_routes__
     {% if !@type.abstract? && !ROUTES.empty? %}
       {% CONCRETE_CONTROLLERS[@type.name.id] = NAMESPACE[0] %}
@@ -248,7 +253,7 @@ abstract class ActionController::Base
             # Check if force SSL is set and redirect to HTTPS if HTTP
 
             # Create an instance of the controller
-            instance = {{@type.name}}.new(context, params)
+            instance = {{@type.name}}.new(context, params, :{{name}})
 
             # Check for errors
             {% if !RESCUE.empty? %}
@@ -256,14 +261,57 @@ abstract class ActionController::Base
             {% end %}
 
             # Execute the before actions
-            # Check if instance called after each action
-            if !instance.render_called
+            {% before_actions = BEFORE.keys %}
+            {% for method, options in BEFORE %}
+              {% only = options[0] %}
+              {% if only != nil && !only.includes?(name) %} # only
+                {% before_actions = before_actions.reject { |act| act == method } %}
+              {% else %}
+                {% except = options[1] %}
+                {% if except != nil && except.includes?(name) %} # except
+                  {% before_actions = before_actions.reject { |act| act == method } %}
+                {% end %}
+              {% end %}
+            {% end %}
+            {% if !before_actions.empty? %}
+              ActionController::Base.__yield__(instance) do
+                {% for action in before_actions %}
+                  {{action}} unless render_called
+                {% end %}
+              end
+
+              # Check if render called before performing the action
+              if !instance.render_called
+            {% end %}
+
+
               # Call the action
               instance.{{name}}
 
               # Execute the after actions
+              {% after_actions = AFTER.keys %}
+              {% for method, options in AFTER %}
+                {% only = options[0] %}
+                {% if only != nil && !only.includes?(name) %} # only
+                  {% after_actions = after_actions.reject { |act| act == method } %}
+                {% else %}
+                  {% except = options[1] %}
+                  {% if except != nil && except.includes?(name) %} # except
+                    {% after_actions = after_actions.reject { |act| act == method } %}
+                  {% end %}
+                {% end %}
+              {% end %}
+              {% if !after_actions.empty? %}
+                ActionController::Base.__yield__(instance) do
+                  {% for action in after_actions %}
+                    {{action}}
+                  {% end %}
+                end
+              {% end %}
 
-            end
+            {% if !before_actions.empty? %}
+              end # END before action render_called check
+            {% end %}
 
             # Implement error handling
             {% if !RESCUE.empty? %}
@@ -329,12 +377,40 @@ abstract class ActionController::Base
 
   end
 
-  macro before_action(method, **options)
-
+  macro before_action(method, only = nil, except = nil)
+    {% if only %}
+      {% if !only.is_a?(ArrayLiteral) %}
+        {% only = [only.id] %}
+      {% else %}
+        {% only = only.map(&.id) %}
+      {% end %}
+    {% end %}
+    {% if except %}
+      {% if !except.is_a?(ArrayLiteral) %}
+        {% except = [except.id] %}
+      {% else %}
+        {% except = except.map(&.id) %}
+      {% end %}
+    {% end %}
+    {% LOCAL_BEFORE[method.id] = {only, except} %}
   end
 
-  macro after_action(method, **options)
-
+  macro after_action(method, only = nil, except = nil)
+    {% if only %}
+      {% if !only.is_a?(ArrayLiteral) %}
+        {% only = [only.id] %}
+      {% else %}
+        {% only = only.map(&.id) %}
+      {% end %}
+    {% end %}
+    {% if except %}
+      {% if !except.is_a?(ArrayLiteral) %}
+        {% except = [except.id] %}
+      {% else %}
+        {% except = except.map(&.id) %}
+      {% end %}
+    {% end %}
+    {% LOCAL_AFTER[method.id] = {only, except} %}
   end
 
   macro force_ssl(**options)

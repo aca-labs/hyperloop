@@ -62,9 +62,9 @@ describe ActionController::Base do
     result.not_nil!.status_code.should eq(400)
   end
 
-  it "should raise an error" do
+  it "should perform before actions and execute the action" do
     result = curl("GET", "/hello/")
-    result.not_nil!.body.should eq("")
+    result.not_nil!.body.should eq("set_var 123")
     result.not_nil!.status_code.should eq(200)
   end
 
