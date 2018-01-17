@@ -2,8 +2,8 @@ require "spec"
 require "./curl"
 require "../src/action-controller"
 
-class Bob < ActionController::Base
-  base "/"
+class BobJane < ActionController::Base
+  # base "/bob/jane" # <== automatically configured
 
   # Test default CRUD
   def index
@@ -34,6 +34,24 @@ class Bob < ActionController::Base
   end
 end
 
+abstract class Application < ActionController::Base
+  rescue_from DivisionByZero do |error|
+    render :bad_request, text: error.message
+  end
+end
+
+class HelloWorld < Application
+  base "/hello"
+
+  def show
+    res = 42 / params["id"].to_i
+    render text: "42 / #{params["id"]} = #{res}"
+  end
+
+  def index
+  end
+end
+
 class MockServer
   include Router
 
@@ -44,7 +62,9 @@ class MockServer
   end
 
   def run
-    Bob.draw_routes(self)
+    {% for klass in ActionController::Base::CONCRETE_CONTROLLERS %}
+      {{klass}}.draw_routes(self)
+    {% end %}
     @server = HTTP::Server.new(@port, [route_handler]).listen
   end
 

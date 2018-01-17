@@ -3,16 +3,39 @@ require "logger"
 require "habitat"
 require "router"
 
-class ActionController::WebServer
-  include Router
-end
+abstract class ActionController::Base
+  # Base route => klass name
+  CONCRETE_CONTROLLERS = {} of Nil => Nil
+  FILTER_TYPES         = %w(ROUTES BEFORE AROUND AFTER RESCUE)
 
-class ActionController::Base
-  # klass => {function, options}
-  BEFORE = {} of Nil => Nil
-  AROUND = {} of Nil => Nil
-  AFTER  = {} of Nil => Nil
-  RESCUE = {} of Nil => Nil
+  {% for ftype in FILTER_TYPES %}
+    # klass => {function => options}
+    {{ftype.id}}_MAPPINGS = {} of Nil => Nil
+  {% end %}
+
+  macro __build_filter_inheritance_macros__
+    {% for ftype in FILTER_TYPES %}
+      {% ltype = ftype.downcase %}
+
+      macro __inherit_{{ltype.id}}_filters__
+        \{% {{ftype.id}}_MAPPINGS[@type.name.id] = LOCAL_{{ftype.id}} %}
+        \{% klasses = [@type.name.id] + @type.ancestors %}
+
+        # Create a mapping of all field names and types
+        \{% for name in klasses %}
+          \{% filters = {{ftype.id}}_MAPPINGS[name.id] %}
+
+          \{% if filters && !filters.empty? %}
+            \{% for name, options in filters %}
+              \{% if !{{ftype.id}}[name] %}
+                \{% {{ftype.id}}[name] = options %}
+              \{% end %}
+            \{% end %}
+          \{% end %}
+        \{% end %}
+      end
+    {% end %}
+  end
 
   CRUD_METHODS = {
     "index"   => {"get", "/"},
@@ -95,10 +118,6 @@ class ActionController::Base
     permanent_redirect: 308,
   }
 
-  # def self.yield_controller(instance)
-  #  with instance yield
-  # end
-
   getter render_called
   getter params : Hash(String, String)
   getter cookies : HTTP::Cookies
@@ -138,13 +157,19 @@ class ActionController::Base
 
   macro inherited
     # default namespace based on class
-    # defines CRUD operations if functions are defined
-    NAMESPACE = [@type.name.stringify.underscore.gsub("::", "/")]
-    LOCAL_BEFORE = {} of Nil => Nil
-    ROUTES = {} of Nil => Nil # {type, route} => block
+    NAMESPACE = [{{"/" + @type.name.stringify.underscore.gsub(/\:\:/, "/")}}]
+
+    {% for ftype in FILTER_TYPES %}
+      # function => options
+      LOCAL_{{ftype.id}} = {} of Nil => Nil
+      {{ftype.id}} = {} of Nil => Nil
+    {% end %}
+
+    __build_filter_inheritance_macros__
 
     macro finished
-      __detect_crud__
+      __build_filter_mappings__
+      __create_route_methods__
       __draw_routes__
       # Create draw_routes function
       # -> Create get / post requests (as per router.cr)
@@ -160,25 +185,46 @@ class ActionController::Base
 
       # Add draw_routes proc to a Server class used to define the HTTP::Server and route handlers
       # Add route paths to the Server class for printing (app --show-routes)
+
+
     end
   end
 
-  macro __detect_crud__
-    # Add CRUD routes to the map
-    {% for name, index in @type.methods.map(&.name.stringify) %}
-      {% args = CRUD_METHODS[name] %}
-      {% if args %}
-        {% ROUTES[name.id] = {args[0], args[1], nil} %}
-      {% end %}
+  macro __build_filter_mappings__
+    {% for ftype in FILTER_TYPES %}
+      {% ltype = ftype.downcase %}
+      __inherit_{{ltype.id}}_filters__
     {% end %}
+  end
 
-    # Create functions for named routes
-    {% for name, details in ROUTES %}
-      {% block = details[2] %}
-      {% if block != nil %} # Skip the CRUD
-        def {{name}}
-          {{block.body}}
-        end
+  macro __create_route_methods__
+    {% if !@type.abstract? %}
+      # Add CRUD routes to the map
+      {% for name, index in @type.methods.map(&.name.stringify) %}
+        {% args = CRUD_METHODS[name] %}
+        {% if args %}
+          {% ROUTES[name.id] = {args[0], args[1], nil} %}
+        {% end %}
+      {% end %}
+
+      # Create functions for named routes
+      {% for name, details in ROUTES %}
+        {% block = details[2] %}
+        {% if block != nil %} # Skip the CRUD
+          def {{name}}
+            {{block.body}}
+          end
+        {% end %}
+      {% end %}
+
+      # Create functions as required for errors
+      {% for klass, details in RESCUE %}
+        {% block = details[1] %}
+        {% if block != nil %} # Skip the CRUD
+          def {{details[0]}}({{*details[1].args}})
+            {{details[1].body}}
+          end
+        {% end %}
       {% end %}
     {% end %}
   end
@@ -193,61 +239,90 @@ class ActionController::Base
   end
 
   macro __draw_routes__
-    def self.draw_routes(router)
-      # Draw the inherited routes
-      super(router)
+    {% if !@type.abstract? && !ROUTES.empty? %}
+      {% CONCRETE_CONTROLLERS[@type.name.id] = NAMESPACE[0] %}
 
-      {% for name, details in ROUTES %}
-        router.{{details[0].id}} "{{NAMESPACE[0].id}}{{details[1].id}}" do |context, params|
-          # Check if force SSL is set and redirect to HTTPS if HTTP
-
-          # Create an instance of the controller
-          instance = {{@type.name}}.new(context, params)
-
-          # Execute the before actions
-          # Check if instance called after each action
-          if !instance.render_called
-            # Call the action
-            instance.{{name}}
-
-            # Execute the after actions
-
-          end
-
-          # Always return the context
-          context
-        end
-      {% end %}
-
-      nil
-    end
-
-    def self.routes
-      super + [
+      def self.draw_routes(router)
         {% for name, details in ROUTES %}
-          {:{{name}}, :{{details[0].id}}, "{{NAMESPACE[0].id}}{{details[1].id}}"},
+          router.{{details[0].id}} "{{NAMESPACE[0].id}}{{details[1].id}}" do |context, params|
+            # Check if force SSL is set and redirect to HTTPS if HTTP
+
+            # Create an instance of the controller
+            instance = {{@type.name}}.new(context, params)
+
+            # Check for errors
+            {% if !RESCUE.empty? %}
+              begin
+            {% end %}
+
+            # Execute the before actions
+            # Check if instance called after each action
+            if !instance.render_called
+              # Call the action
+              instance.{{name}}
+
+              # Execute the after actions
+
+            end
+
+            # Implement error handling
+            {% if !RESCUE.empty? %}
+              {% for exception, details in RESCUE %}
+                rescue e : {{exception.id}}
+                  if !instance.render_called
+                    instance.{{details[0]}}(e)
+                  else
+                    raise e
+                  end
+              {% end %}
+
+              end
+            {% end %}
+
+            # Always return the context
+            context
+          end
         {% end %}
-      ]
-    end
+
+        nil
+      end
+
+      def self.routes
+        [
+          {% for name, details in ROUTES %}
+            {:{{name}}, :{{details[0].id}}, "{{NAMESPACE[0].id}}{{details[1].id}}"},
+          {% end %}
+        ]
+      end
+    {% end %}
   end
 
   macro base(name = nil)
     {% if name.nil? || name.empty? || name == "/" %}
-      {% NAMESPACE[0] = "" %}
+      {% NAMESPACE[0] = "/" %}
     {% else %}
-      {% NAMESPACE[0] = "/" + name.id.stringify %}
+      {% if name.id.stringify.starts_with?("/") %}
+        {% NAMESPACE[0] = name.id.stringify %}
+      {% else %}
+        {% NAMESPACE[0] = "/" + name.id.stringify %}
+      {% end %}
     {% end %}
   end
 
   # Define each method for supported http methods
   {% for http_method in ::Router::HTTP_METHODS %}
     macro {{http_method.id}}(path, name, &block)
-      \{% ROUTES[name.id] = { {{http_method}}, path, block } %}
+      \{% LOCAL_ROUTES[name.id] = { {{http_method}}, path, block } %}
     end
   {% end %}
 
   macro rescue_from(error_class, method = nil, &block)
-
+    {% if method %}
+      {% LOCAL_RESCUE[error_class] = {method.id, nil} %}
+    {% else %}
+      {% method = error_class.stringify.underscore.gsub(/\:\:/, "_") %}
+      {% LOCAL_RESCUE[error_class] = {method.id, block} %}
+    {% end %}
   end
 
   macro around_action(method, **options)
