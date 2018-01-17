@@ -11,6 +11,8 @@ def curl(method : String, path : String) : HTTP::Client::Response?
     response = client.post path
   when "PUT"
     response = client.put path
+  when "PATCH"
+    response = client.patch path
   end
 
   client.close

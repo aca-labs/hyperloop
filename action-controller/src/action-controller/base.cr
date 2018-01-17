@@ -133,6 +133,8 @@ abstract class ActionController::Base
   end
 
   macro render(status = :ok, json = nil, text = nil)
+    raise ::ActionController::DoubleRenderError.new if @render_called
+
     {% if status != :ok || status != 200 %}
       @response.status_code = {{STATUS_CODES[status] || status}}
     {% end %}
@@ -151,6 +153,8 @@ abstract class ActionController::Base
   end
 
   macro redirect_to(path, status = :found)
+    raise ::ActionController::DoubleRenderError.new if @render_called
+
     @response.status_code = {{REDIRECTION_CODES[status] || status}}
     @response.headers["Location"] = {{path}}
     @render_called = true

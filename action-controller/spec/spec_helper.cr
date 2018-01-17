@@ -43,8 +43,8 @@ end
 class HelloWorld < Application
   base "/hello"
 
-  before_action :set_var, only: :index
-  after_action :after, except: :index
+  before_action :set_var, except: :show
+  after_action :after, only: :show
 
   def show
     raise "set_var was set!" if @me
@@ -54,6 +54,11 @@ class HelloWorld < Application
 
   def index
     render text: "set_var #{@me}"
+  end
+
+  def update
+    render :accepted, text: "Thanks!"
+    redirect_to "/"
   end
 
   private def set_var

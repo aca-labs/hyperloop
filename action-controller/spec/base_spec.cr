@@ -68,6 +68,11 @@ describe ActionController::Base do
     result.not_nil!.status_code.should eq(200)
   end
 
+  it "should raise a double render error if render is called twice" do
+    result = curl("PATCH", "/hello/123/")
+    result.not_nil!.status_code.should eq(500)
+  end
+
   it "should list routes" do
     BobJane.routes.should eq([
       {:redirect, :get, "/bob_jane/redirect"},

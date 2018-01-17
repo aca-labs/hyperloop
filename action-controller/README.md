@@ -76,18 +76,21 @@ class MyResource < ActionController::Base
   end
 
   def index
+    raise ::ActionController::DoubleRenderError.new if @render_called
     @response.content_type = "text/plain"
     @response.print("index")
     @render_called = true
   end
 
   def show
+    raise ::ActionController::DoubleRenderError.new if @render_called
     @response.content_type = "application/json"
     @response.print({id: params["id"]}.to_json)
     @render_called = true
   end
 
   def route_name
+    raise ::ActionController::DoubleRenderError.new if @render_called
     @response.status_code = 202
     @response.content_type = "text/plain"
     @response.print("simple right?")
