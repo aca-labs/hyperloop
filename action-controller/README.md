@@ -18,7 +18,7 @@ abstract class Application < ActionController::Base
   end
 
   private def ensure_authenticated
-    render :unauthorized unless cookies[:user]
+    render :unauthorized unless cookies["user"]
   end
 end
 
