@@ -6,7 +6,7 @@ require "router"
 abstract class ActionController::Base
   # Base route => klass name
   CONCRETE_CONTROLLERS = {} of Nil => Nil
-  FILTER_TYPES         = %w(ROUTES BEFORE AROUND AFTER RESCUE)
+  FILTER_TYPES         = %w(ROUTES BEFORE AROUND AFTER RESCUE FORCE)
 
   {% for ftype in FILTER_TYPES %}
     # klass => {function => options}
@@ -152,6 +152,10 @@ abstract class ActionController::Base
     @render_called = true
   end
 
+  macro head(status)
+    render({{status}})
+  end
+
   macro redirect_to(path, status = :found)
     raise ::ActionController::DoubleRenderError.new if @render_called
 
@@ -254,7 +258,26 @@ abstract class ActionController::Base
       def self.draw_routes(router)
         {% for name, details in ROUTES %}
           router.{{details[0].id}} "{{NAMESPACE[0].id}}{{details[1].id}}" do |context, params|
+
             # Check if force SSL is set and redirect to HTTPS if HTTP
+            {% force = false %}
+            {% if FORCE[:force] %}
+              {% options = FORCE[:force] %}
+              {% only = options[0] %}
+              {% if only != nil && only.includes?(name) %} # only
+                {% force = true %}
+              {% else %}
+                {% except = options[1] %}
+                {% if except != nil && !except.includes?(name) %} # except
+                  {% force = true %}
+                {% end %}
+              {% end %}
+            {% end %}
+            {% if force %}
+              if request_protocol(context) != :https
+                redirect_to_https(context)
+              else
+            {% end %}
 
             # Create an instance of the controller
             instance = {{@type.name}}.new(context, params, :{{name}})
@@ -283,11 +306,12 @@ abstract class ActionController::Base
                   {{action}} unless render_called
                 {% end %}
               end
-
-              # Check if render called before performing the action
-              if !instance.render_called
             {% end %}
 
+            # Check if render could have been before performing the action
+            {% if !before_actions.empty? %}
+              if !instance.render_called
+            {% end %}
 
               # Call the action
               instance.{{name}}
@@ -329,6 +353,10 @@ abstract class ActionController::Base
               {% end %}
 
               end
+            {% end %}
+
+            {% if force %}
+              end # END force SSL check
             {% end %}
 
             # Always return the context
@@ -417,12 +445,65 @@ abstract class ActionController::Base
     {% LOCAL_AFTER[method.id] = {only, except} %}
   end
 
-  macro force_ssl(**options)
-    # only, except etc
+  macro force_ssl(only = nil, except = nil)
+    {% if only %}
+      {% if !only.is_a?(ArrayLiteral) %}
+        {% only = [only.id] %}
+      {% else %}
+        {% only = only.map(&.id) %}
+      {% end %}
+    {% end %}
+    {% if except %}
+      {% if !except.is_a?(ArrayLiteral) %}
+        {% except = [except.id] %}
+      {% else %}
+        {% except = except.map(&.id) %}
+      {% end %}
+    {% end %}
+    {% LOCAL_FORCE[:force] = {only, except} %}
+  end
+
+  macro force_tls(only = nil, except = nil)
+    force_ssl({{only}}, {{except}})
   end
 
   macro param(name)
     # extract type and name etc
     # safe_params == hash of extracted params
+  end
+
+  def self.request_protocol(context)
+    return :https if context.request.headers["X-Forwarded-Proto"]? =~ /https/i
+    return :https if context.request.headers["Forwarded"]? =~ /https/i
+    :http
+  end
+
+  def self.redirect_to_https(context)
+    req = context.request
+    resp = context.response
+    resp.status_code = 302
+    resp.headers["Location"] = "https://#{req.host}#{req.resource}"
+  end
+
+  def remote_ip
+    return @remote_ip if @remote_ip
+
+    @remote_ip = @request.headers["X-Forwarded-Proto"]? || @request.headers["X-Real-IP"]?
+
+    if @remote_ip.nil?
+      forwarded = @request.headers["Forwarded"]?
+      if forwarded
+        match = forwarded.match(/for=(.+?)(;|$)/i)
+        if match
+          ip = match[0]
+          ip = ip.split(/=|;/i)[1]
+          @remote_ip = ip if ip && !["_hidden", "_secret", "unknown"].includes?(ip)
+        end
+      end
+
+      @remote_ip = "127.0.0.1" unless @remote_ip
+    end
+
+    @remote_ip
   end
 end

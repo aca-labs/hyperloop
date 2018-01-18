@@ -73,6 +73,13 @@ describe ActionController::Base do
     result.not_nil!.status_code.should eq(500)
   end
 
+  it "should force redirect if force ssl is set" do
+    result = curl("DELETE", "/hello/123")
+    result.inspect
+    result.not_nil!.status_code.should eq(302)
+    result.not_nil!.headers["location"].not_nil!.should eq("https://localhost/hello/123")
+  end
+
   it "should list routes" do
     BobJane.routes.should eq([
       {:redirect, :get, "/bob_jane/redirect"},

@@ -13,6 +13,8 @@ def curl(method : String, path : String) : HTTP::Client::Response?
     response = client.put path
   when "PATCH"
     response = client.patch path
+  when "DELETE"
+    response = client.delete path
   end
 
   client.close

@@ -46,6 +46,8 @@ class HelloWorld < Application
   before_action :set_var, except: :show
   after_action :after, only: :show
 
+  force_tls only: [:destroy]
+
   def show
     raise "set_var was set!" if @me
     res = 42 / params["id"].to_i
@@ -59,6 +61,10 @@ class HelloWorld < Application
   def update
     render :accepted, text: "Thanks!"
     redirect_to "/"
+  end
+
+  def destroy
+    head :accepted
   end
 
   private def set_var
