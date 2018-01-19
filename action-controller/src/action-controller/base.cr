@@ -159,6 +159,8 @@ abstract class ActionController::Base
   macro redirect_to(path, status = :found)
     raise ::ActionController::DoubleRenderError.new if @render_called
 
+    # TODO:: Support redirect to path name (Symbol)
+
     @response.status_code = {{REDIRECTION_CODES[status] || status}}
     @response.headers["Location"] = {{path}}
     @render_called = true
@@ -179,23 +181,19 @@ abstract class ActionController::Base
     macro finished
       __build_filter_mappings__
       __create_route_methods__
-      __draw_routes__
+
       # Create draw_routes function
-      # -> Create get / post requests (as per router.cr)
       #
       # Create instance of controller class init with context, params and logger
-      # inline the before actions
-      # inline the around actions
-      # inline the block code or function call (when CRUD)
-      # inline the after actions
-      # inline rescue code
-      #
-      # After each step check if render has been called and return if it has
-
-      # Add draw_routes proc to a Server class used to define the HTTP::Server and route handlers
-      # Add route paths to the Server class for printing (app --show-routes)
-
-
+      # protocol checks (https etc)
+      # controller instance created
+      # begin exception helpers
+      # inline the around filters
+      # inline the before filters
+      # inline the action
+      # inline the after filters
+      # rescue exception handlers
+      __draw_routes__
     end
   end
 
@@ -274,7 +272,7 @@ abstract class ActionController::Base
               {% end %}
             {% end %}
             {% if force %}
-              if request_protocol(context) != :https
+              if request_protocol(context.request) != :https
                 redirect_to_https(context)
               else
             {% end %}
@@ -287,7 +285,27 @@ abstract class ActionController::Base
               begin
             {% end %}
 
-            # Execute the before actions
+            # Execute the around filters
+            {% around_actions = AROUND.keys %}
+            {% for method, options in AROUND %}
+              {% only = options[0] %}
+              {% if only != nil && !only.includes?(name) %} # only
+                {% around_actions = around_actions.reject { |act| act == method } %}
+              {% else %}
+                {% except = options[1] %}
+                {% if except != nil && except.includes?(name) %} # except
+                  {% around_actions = around_actions.reject { |act| act == method } %}
+                {% end %}
+              {% end %}
+            {% end %}
+            {% if !around_actions.empty? %}
+              ActionController::Base.__yield__(instance) do
+                {% for action in around_actions %}
+                    {{action}} do
+                {% end %}
+            {% end %}
+
+            # Execute the before filters
             {% before_actions = BEFORE.keys %}
             {% for method, options in BEFORE %}
               {% only = options[0] %}
@@ -301,11 +319,15 @@ abstract class ActionController::Base
               {% end %}
             {% end %}
             {% if !before_actions.empty? %}
-              ActionController::Base.__yield__(instance) do
+              {% if around_actions.empty? %}
+                ActionController::Base.__yield__(instance) do
+              {% end %}
                 {% for action in before_actions %}
                   {{action}} unless render_called
                 {% end %}
-              end
+              {% if around_actions.empty? %}
+                end
+              {% end %}
             {% end %}
 
             # Check if render could have been before performing the action
@@ -316,29 +338,38 @@ abstract class ActionController::Base
               # Call the action
               instance.{{name}}
 
-              # Execute the after actions
-              {% after_actions = AFTER.keys %}
-              {% for method, options in AFTER %}
-                {% only = options[0] %}
-                {% if only != nil && !only.includes?(name) %} # only
-                  {% after_actions = after_actions.reject { |act| act == method } %}
-                {% else %}
-                  {% except = options[1] %}
-                  {% if except != nil && except.includes?(name) %} # except
-                    {% after_actions = after_actions.reject { |act| act == method } %}
-                  {% end %}
-                {% end %}
-              {% end %}
-              {% if !after_actions.empty? %}
-                ActionController::Base.__yield__(instance) do
-                  {% for action in after_actions %}
-                    {{action}}
-                  {% end %}
-                end
-              {% end %}
-
             {% if !before_actions.empty? %}
               end # END before action render_called check
+            {% end %}
+
+            # END around action blocks
+            {% if !around_actions.empty? %}
+              {% for action in around_actions %}
+                nil
+                end
+              {% end %}
+              end
+            {% end %}
+
+            # Execute the after filters
+            {% after_actions = AFTER.keys %}
+            {% for method, options in AFTER %}
+              {% only = options[0] %}
+              {% if only != nil && !only.includes?(name) %} # only
+                {% after_actions = after_actions.reject { |act| act == method } %}
+              {% else %}
+                {% except = options[1] %}
+                {% if except != nil && except.includes?(name) %} # except
+                  {% after_actions = after_actions.reject { |act| act == method } %}
+                {% end %}
+              {% end %}
+            {% end %}
+            {% if !after_actions.empty? %}
+              ActionController::Base.__yield__(instance) do
+                {% for action in after_actions %}
+                  {{action}}
+                {% end %}
+              end
             {% end %}
 
             # Implement error handling
@@ -405,8 +436,22 @@ abstract class ActionController::Base
     {% end %}
   end
 
-  macro around_action(method, **options)
-
+  macro around_action(method, only = nil, except = nil)
+    {% if only %}
+      {% if !only.is_a?(ArrayLiteral) %}
+        {% only = [only.id] %}
+      {% else %}
+        {% only = only.map(&.id) %}
+      {% end %}
+    {% end %}
+    {% if except %}
+      {% if !except.is_a?(ArrayLiteral) %}
+        {% except = [except.id] %}
+      {% else %}
+        {% except = except.map(&.id) %}
+      {% end %}
+    {% end %}
+    {% LOCAL_AROUND[method.id] = {only, except} %}
   end
 
   macro before_action(method, only = nil, except = nil)
@@ -446,6 +491,7 @@ abstract class ActionController::Base
   end
 
   macro force_ssl(only = nil, except = nil)
+    # TODO:: support more options like HSTS headers
     {% if only %}
       {% if !only.is_a?(ArrayLiteral) %}
         {% only = [only.id] %}
@@ -472,9 +518,9 @@ abstract class ActionController::Base
     # safe_params == hash of extracted params
   end
 
-  def self.request_protocol(context)
-    return :https if context.request.headers["X-Forwarded-Proto"]? =~ /https/i
-    return :https if context.request.headers["Forwarded"]? =~ /https/i
+  def self.request_protocol(request)
+    return :https if request.headers["X-Forwarded-Proto"]? =~ /https/i
+    return :https if request.headers["Forwarded"]? =~ /https/i
     :http
   end
 
@@ -485,25 +531,38 @@ abstract class ActionController::Base
     resp.headers["Location"] = "https://#{req.host}#{req.resource}"
   end
 
-  def remote_ip
-    return @remote_ip if @remote_ip
+  # ===============
+  # Helper methods:
+  # ===============
+  def format
+    ctype = @request.headers["Content-Type"]?
+    ctype = ctype.split(";")[0] if ctype
+    ctype
+  end
 
-    @remote_ip = @request.headers["X-Forwarded-Proto"]? || @request.headers["X-Real-IP"]?
+  def protocol
+    self.class.request_protocol(@request)
+  end
 
-    if @remote_ip.nil?
+  def client_ip
+    return @client_ip if @client_ip
+
+    @client_ip = @request.headers["X-Forwarded-Proto"]? || @request.headers["X-Real-IP"]?
+
+    if @client_ip.nil?
       forwarded = @request.headers["Forwarded"]?
       if forwarded
         match = forwarded.match(/for=(.+?)(;|$)/i)
         if match
           ip = match[0]
           ip = ip.split(/=|;/i)[1]
-          @remote_ip = ip if ip && !["_hidden", "_secret", "unknown"].includes?(ip)
+          @client_ip = ip if ip && !["_hidden", "_secret", "unknown"].includes?(ip)
         end
       end
 
-      @remote_ip = "127.0.0.1" unless @remote_ip
+      @client_ip = "127.0.0.1" unless @client_ip
     end
 
-    @remote_ip
+    @client_ip
   end
 end

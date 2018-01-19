@@ -43,10 +43,13 @@ end
 class HelloWorld < Application
   base "/hello"
 
+  force_tls only: [:destroy]
+
+  around_action :around1, only: :around
+  around_action :around2, only: :around
+
   before_action :set_var, except: :show
   after_action :after, only: :show
-
-  force_tls only: [:destroy]
 
   def show
     raise "set_var was set!" if @me
@@ -56,6 +59,10 @@ class HelloWorld < Application
 
   def index
     render text: "set_var #{@me}"
+  end
+
+  get "/around", :around do
+    render text: "var is #{@me}"
   end
 
   def update
@@ -68,11 +75,27 @@ class HelloWorld < Application
   end
 
   private def set_var
-    @me = 123
+    me = @me
+    me ||= 0
+    me += 123
+    @me = me
   end
 
   private def after
     puts "after #{action_name}"
+  end
+
+  private def around1
+    @me = 7
+    yield
+  end
+
+  private def around2
+    me = @me
+    me ||= 0
+    me += 3
+    @me = me
+    yield
   end
 end
 

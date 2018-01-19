@@ -23,7 +23,8 @@ abstract class Application < ActionController::Base
 end
 
 class Books < Application
-  base "/books" # <= this is automatically
+  # this is automatically configured based on class name and namespace
+  base "/books"
 
   def index
     render json: ["book1", "book2"]
