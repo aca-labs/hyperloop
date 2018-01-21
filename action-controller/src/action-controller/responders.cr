@@ -87,6 +87,7 @@ module ActionController::Responders
 
   macro render(status = :ok, json = nil, xml = nil, html = nil, yaml = nil, text = nil, binary = nil)
     raise ::ActionController::DoubleRenderError.new if @render_called
+    @render_called = true
 
     {% if status != :ok || status != 200 %}
       @response.status_code = {{STATUS_CODES[status] || status}}
@@ -133,8 +134,6 @@ module ActionController::Responders
       @response.content_type = MIME_TYPES[:binary] unless ctype
       @response.print({{binary}}.to_s)
     {% end %}
-
-    @render_called = true
   end
 
   macro head(status)
@@ -143,24 +142,23 @@ module ActionController::Responders
 
   macro redirect_to(path, status = :found)
     raise ::ActionController::DoubleRenderError.new if @render_called
+    @render_called = true
 
     # TODO:: Support redirect to path name (Symbol)
 
     @response.status_code = {{REDIRECTION_CODES[status] || status}}
     @response.headers["Location"] = {{path}}
-    @render_called = true
   end
 
   macro respond_with(&block)
     raise ::ActionController::DoubleRenderError.new if @render_called
+    @render_called = true
 
     resp = SelectResponse.new(@response, accepts)
     resp.responses do
       {{block.body}}
     end
     resp.build_response
-
-    @render_called = true
   end
 
   class SelectResponse
