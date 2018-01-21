@@ -55,6 +55,7 @@ require "action-controller"
 
 class MyResource < ActionController::Base
   base "/resource"
+  before_action :check_id, only: show
 
   def index
     render text: "index"
@@ -66,6 +67,12 @@ class MyResource < ActionController::Base
 
   put "/custom/route", :route_name do
     render :accepted, text: "simple right?"
+  end
+
+  private def check_id
+    if params["id"] == "12"
+      redirect "/"
+    end
   end
 end
 ```
@@ -130,6 +137,14 @@ class MyResource < ActionController::Base
     return
   end
 
+  private def check_id
+    if params["id"] == "12"
+      @response.status_code = 302
+      @response.headers["Location"] = "/"
+      @render_called = true
+    end
+  end
+
   def self.draw_routes(router)
     # Supports inheritance
     super(router)
@@ -143,7 +158,10 @@ class MyResource < ActionController::Base
 
     router.get "/resource/:id" do |context, params|
       instance = MyResource.new(context, params)
-      instance.show
+      instance.check_id unless instance.render_called
+      if !instance.render_called
+        instance.show
+      end
       context
     end
 
