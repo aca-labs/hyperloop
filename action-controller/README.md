@@ -29,11 +29,18 @@ class Books < Application
   # it can be overriden here
   base "/books"
 
+  # route => "/books/"
   def index
     render json: ["book1", "book2"]
   end
 
+  # route => "/show/:id"
   def show
+
+    # Using the Accepts header will select the appropriate response
+    # If the Accepts header isn't present it defaults to the first in the block
+    # None of the code is executed (string interpolation, xml builder etc)
+    #  unless it is to be sent to the client
     respond_with do
       text "the ID was #{params["id"]}"
       json({id: params["id"]})
