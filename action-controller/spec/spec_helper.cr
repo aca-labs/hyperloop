@@ -51,6 +51,20 @@ class HelloWorld < Application
   before_action :set_var, except: :show
   after_action :after, only: :show
 
+  def self.controller(params = {} of String => String, referer = "", accept = nil, action = :example)
+    request = HTTP::Request.new("GET", "/")
+    request.headers.add("Referer", referer)
+    request.headers.add("Accept", accept) if accept
+    context = create_context(request)
+    HelloWorld.new(context, params, action)
+  end
+
+  def self.create_context(request)
+    io = IO::Memory.new
+    response = HTTP::Server::Response.new(io)
+    HTTP::Server::Context.new(request, response)
+  end
+
   def show
     raise "set_var was set!" if @me
     res = 42 / params["id"].to_i
@@ -58,7 +72,14 @@ class HelloWorld < Application
   end
 
   def index
-    render text: "set_var #{@me}"
+    respond_with do
+      text "set_var #{@me}"
+      json({set_var: @me})
+      xml do
+        str = "<set_var>#{@me}</set_var>"
+        XML.parse(str).to_s
+      end
+    end
   end
 
   get "/around", :around do

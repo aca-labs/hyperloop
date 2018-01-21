@@ -1,9 +1,13 @@
-require "json"
-require "logger"
-require "habitat"
 require "router"
+require "./responders"
 
 abstract class ActionController::Base
+  include ActionController::Responders
+
+  Habitat.create do
+    setting logger : Logger = Logger.new(STDOUT)
+  end
+
   # Base route => klass name
   CONCRETE_CONTROLLERS = {} of Nil => Nil
   FILTER_TYPES         = %w(ROUTES BEFORE AROUND AFTER RESCUE FORCE)
@@ -45,125 +49,30 @@ abstract class ActionController::Base
     "destroy" => {"delete", "/:id"},
   }
 
-  STATUS_CODES = {
-    # 1xx informational
-    continue:            100,
-    switching_protocols: 101,
-    processing:          102,
-
-    # 2xx success
-    ok:                            200,
-    created:                       201,
-    accepted:                      202,
-    non_authoritative_information: 203,
-    no_content:                    204,
-    reset_content:                 205,
-    partial_content:               206,
-    multi_status:                  207,
-    already_reported:              208,
-    im_used:                       226,
-
-    # 4xx client error
-    bad_request:                     400,
-    unauthorized:                    401,
-    payment_required:                402,
-    forbidden:                       403,
-    not_found:                       404,
-    method_not_allowed:              405,
-    not_acceptable:                  406,
-    proxy_authentication_required:   407,
-    request_timeout:                 408,
-    conflict:                        409,
-    gone:                            410,
-    length_required:                 411,
-    precondition_failed:             412,
-    payload_too_large:               413,
-    uri_too_long:                    414,
-    unsupported_media_type:          415,
-    range_not_satisfiable:           416,
-    expectation_failed:              417,
-    misdirected_request:             421,
-    unprocessable_entity:            422,
-    locked:                          423,
-    failed_dependency:               424,
-    upgrade_required:                426,
-    precondition_required:           428,
-    too_many_requests:               429,
-    request_header_fields_too_large: 431,
-    unavailable_for_legal_reasons:   451,
-
-    # 5xx server error
-    internal_server_error:           500,
-    not_implemented:                 501,
-    bad_gateway:                     502,
-    service_unavailable:             503,
-    gateway_timeout:                 504,
-    http_version_not_supported:      505,
-    variant_also_negotiates:         506,
-    insufficient_storage:            507,
-    loop_detected:                   508,
-    not_extended:                    510,
-    network_authentication_required: 511,
-  }
-
-  REDIRECTION_CODES = {
-    # 3xx redirection
-    multiple_choices:   300,
-    moved_permanently:  301,
-    found:              302,
-    see_other:          303,
-    not_modified:       304,
-    use_proxy:          305,
-    temporary_redirect: 307,
-    permanent_redirect: 308,
-  }
-
+  getter logger : Logger
   getter render_called
   getter action_name : Symbol
-  getter params : Hash(String, String)
+  getter params : HTTP::Params
   getter cookies : HTTP::Cookies
   getter request : HTTP::Request
   getter response : HTTP::Server::Response
 
-  def initialize(context : HTTP::Server::Context, @params, @action_name)
+  def initialize(context : HTTP::Server::Context, params : Hash(String, String), @action_name)
     @render_called = false
     @request = context.request
     @response = context.response
     @cookies = @request.cookies
-  end
+    @params = @request.query_params
 
-  macro render(status = :ok, json = nil, text = nil)
-    raise ::ActionController::DoubleRenderError.new if @render_called
+    @logger = settings.logger
 
-    {% if status != :ok || status != 200 %}
-      @response.status_code = {{STATUS_CODES[status] || status}}
-    {% end %}
-
-    {% if json %}
-      @response.content_type = "application/json"
-      @response.print({{json}}.to_json)
-    {% else %}
-      {% if text %}
-        @response.content_type = "text/plain"
-        @response.print({{text}})
-      {% end %}
-    {% end %}
-
-    @render_called = true
-  end
-
-  macro head(status)
-    render({{status}})
-  end
-
-  macro redirect_to(path, status = :found)
-    raise ::ActionController::DoubleRenderError.new if @render_called
-
-    # TODO:: Support redirect to path name (Symbol)
-
-    @response.status_code = {{REDIRECTION_CODES[status] || status}}
-    @response.headers["Location"] = {{path}}
-    @render_called = true
+    # Add route params to the HTTP params
+    # giving preference to route params
+    params.each do |key, value|
+      values = @params.fetch_all(key) || [] of String
+      values.unshift(value)
+      @params.set_all(key, values)
+    end
   end
 
   macro inherited
@@ -534,12 +443,6 @@ abstract class ActionController::Base
   # ===============
   # Helper methods:
   # ===============
-  def format
-    ctype = @request.headers["Content-Type"]?
-    ctype = ctype.split(";")[0] if ctype
-    ctype
-  end
-
   def protocol
     self.class.request_protocol(@request)
   end

@@ -31,7 +31,15 @@ class Books < Application
   end
 
   def show
-    render text: params["id"]
+    respond_with do
+      text "the ID was #{params["id"]}"
+      json({id: params["id"]})
+      xml do
+        XML.build(indent: "  ") do |xml|
+          xml.element("id") { xml.text params["id"] }
+        end
+      end
+    end
   end
 end
 ```

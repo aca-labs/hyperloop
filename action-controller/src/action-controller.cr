@@ -1,3 +1,6 @@
+require "logger"
+require "habitat"
+
 module ActionController
   VERSION = "0.1.0"
 
@@ -13,4 +16,4 @@ module ActionController
   end
 end
 
-require "./action-controller/*"
+require "./action-controller/base"
