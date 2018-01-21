@@ -101,15 +101,14 @@ class MyResource < ActionController::Base
   end
 
   def index
-    raise ::ActionController::DoubleRenderError.new if @render_called
     @render_called = true
     ctype = @response.headers["Content-Type"]?
     @response.content_type = "text/plain" unless ctype
     @response.print("index")
+    return
   end
 
   def show
-    raise ::ActionController::DoubleRenderError.new if @render_called
     @render_called = true
     ctype = @response.headers["Content-Type"]?
     @response.content_type = "application/json" unless ctype
@@ -119,15 +118,16 @@ class MyResource < ActionController::Base
     else
       @response.print(output.to_json)
     end
+    return
   end
 
   def route_name
-    raise ::ActionController::DoubleRenderError.new if @render_called
     @render_called = true
     @response.status_code = 202
     ctype = @response.headers["Content-Type"]?
     @response.content_type = "text/plain" unless ctype
     @response.print("simple right?")
+    return
   end
 
   def self.draw_routes(router)

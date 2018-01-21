@@ -131,6 +131,8 @@ module ActionController::Responders
       @response.content_type = MIME_TYPES[:binary] unless ctype
       @response.print({{binary}}.to_s)
     {% end %}
+
+    @render_called = true
     return
   end
 
@@ -143,6 +145,7 @@ module ActionController::Responders
 
     @response.status_code = {{REDIRECTION_CODES[status] || status}}
     @response.headers["Location"] = {{path}}
+    @render_called = true
     return
   end
 
@@ -152,6 +155,7 @@ module ActionController::Responders
       {{block.body}}
     end
     resp.build_response
+    @render_called = true
     return
   end
 
