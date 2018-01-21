@@ -51,6 +51,8 @@ class HelloWorld < Application
   before_action :set_var, except: :show
   after_action :after, only: :show
 
+  before_action :render_early, only: :update
+
   def self.controller(params = {} of String => String, referer = "", accept = nil, action = :example)
     request = HTTP::Request.new("GET", "/")
     request.headers.add("Referer", referer)
@@ -88,6 +90,10 @@ class HelloWorld < Application
 
   def update
     render :accepted, text: "Thanks!"
+  end
+
+  private def render_early
+    render :forbidden, text: "Access Denied"
   end
 
   def destroy

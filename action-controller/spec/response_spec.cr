@@ -88,6 +88,12 @@ describe "end to end requests and responses" do
     result.not_nil!.status_code.should eq(200)
   end
 
+  it "should stop callbacks if render is called in a before filter" do
+    result = curl("PATCH", "/hello/123/")
+    result.not_nil!.body.should eq("Access Denied")
+    result.not_nil!.status_code.should eq(403)
+  end
+
   it "should force redirect if force ssl is set" do
     result = curl("DELETE", "/hello/123")
     result.not_nil!.status_code.should eq(302)
