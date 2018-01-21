@@ -88,11 +88,6 @@ describe "end to end requests and responses" do
     result.not_nil!.status_code.should eq(200)
   end
 
-  it "should raise a double render error if render is called twice" do
-    result = curl("PATCH", "/hello/123/")
-    result.not_nil!.status_code.should eq(500)
-  end
-
   it "should force redirect if force ssl is set" do
     result = curl("DELETE", "/hello/123")
     result.not_nil!.status_code.should eq(302)

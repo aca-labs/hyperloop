@@ -88,7 +88,6 @@ class HelloWorld < Application
 
   def update
     render :accepted, text: "Thanks!"
-    redirect_to "/"
   end
 
   def destroy
